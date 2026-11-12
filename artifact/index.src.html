@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KaloriyaAI — ovqat kaloriyasini rasmdan aniqlash</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>/*TAILWIND*/</style>
+<style>
+  html, body { background:#f4fbf8; color:#0f172a; font-family:Inter,system-ui,sans-serif; -webkit-tap-highlight-color:transparent; }
+  @media (prefers-color-scheme: dark) { html, body { background:#020617; color:#e2e8f0; } }
+  .bg-blobs { position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background: radial-gradient(40rem 30rem at 0% 0%, rgb(167 243 208/.55), transparent 60%),
+      radial-gradient(35rem 30rem at 100% 10%, rgb(153 246 228/.5), transparent 60%),
+      radial-gradient(40rem 30rem at 50% 110%, rgb(254 243 199/.6), transparent 60%); }
+  @media (prefers-color-scheme: dark) { .bg-blobs { background: radial-gradient(40rem 30rem at 0% 0%, rgb(16 185 129/.18), transparent 60%), radial-gradient(35rem 30rem at 100% 10%, rgb(20 184 166/.14), transparent 60%); } }
+  @keyframes fade-up { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:none } }
+  .fade-up { animation: fade-up .5s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes scan { 0% { top:-6rem } 100% { top:100% } }
+  .scan-line { position:absolute; left:0; right:0; height:6rem; background:linear-gradient(to bottom,transparent,rgb(52 211 153/.55),transparent);
+    border-bottom:2px solid rgb(110 231 183); box-shadow:0 0 30px rgb(52 211 153/.7); animation:scan 1.8s ease-in-out infinite; }
+  input[type=range] { -webkit-appearance:none; appearance:none; height:6px; border-radius:9999px; background:rgb(209 250 229); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; border-radius:9999px; background:#10b981; border:3px solid #fff; box-shadow:0 2px 8px rgb(16 185 129/.5); }
+  input[type=range]::-moz-range-thumb { width:16px; height:16px; border-radius:9999px; background:#10b981; border:3px solid #fff; }
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; }
+  .ring-anim { transition: stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1); }
+  .tabnum { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="bg-blobs" aria-hidden="true"></div>
+<div class="relative min-h-screen pb-28 sm:pb-10" style="padding-top:env(safe-area-inset-top)">
+  <header class="sticky top-0 z-20 border-b border-white/40 bg-white/60 backdrop-blur-xl dark:border-white/5 dark:bg-slate-950/60">
+    <div class="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+      <button data-tab="scan" class="flex items-center gap-2">
+        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 text-lg shadow-md shadow-emerald-500/30">🥑</span>
+        <span class="text-lg font-extrabold tracking-tight strong">Kaloriya<span class="text-emerald-500">AI</span></span>
+      </button>
+      <nav id="topnav" class="hidden gap-1 rounded-2xl bg-slate-100/80 p-1 sm:flex dark:bg-white/5"></nav>
+      <button data-tab="diary" id="hdrKcal" class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 tabnum dark:bg-emerald-500/10 dark:text-emerald-300">… kkal</button>
+    </div>
+  </header>
+  <main id="main" class="relative mx-auto max-w-2xl px-4 pt-6"></main>
+  <nav id="botnav" class="fixed inset-x-3 z-30 rounded-3xl border border-white/50 bg-white/80 p-1.5 shadow-xl shadow-slate-900/10 backdrop-blur-xl sm:hidden dark:border-white/10 dark:bg-slate-900/80" style="bottom:calc(12px + env(safe-area-inset-bottom))"></nav>
+  <div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-6 backdrop-blur-sm">
+    <div class="glass w-full max-w-sm rounded-3xl p-6 text-center">
+      <p id="modalText" class="font-medium strong"></p>
+      <div class="mt-5 flex gap-3"><button id="modalNo" class="btn-secondary flex-1">Yo'q</button><button id="modalYes" class="btn-primary flex-1 !from-red-500 !to-rose-500 !shadow-red-500/30">Ha</button></div>
+    </div>
+  </div>
+</div>
+<input id="fileInput" type="file" accept="image/*" hidden>
+
+<script>
+(() => {
+'use strict';
+// ---------- helpers ----------
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const r0 = n => Math.round(n || 0);
+const f1 = n => (Math.round((n || 0) * 10) / 10).toFixed(1);
+const todayStr = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const shift = (date, days) => { const d = new Date(date + 'T12:00:00'); d.setDate(d.getDate() + days); return todayStr(d); };
+const MONTHS = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr'];
+const DAYS = ['Ya','Du','Se','Ch','Pa','Ju','Sh'];
+const pretty = d => d === todayStr() ? 'Bugun' : d === shift(todayStr(), -1) ? 'Kecha' : (x => `${x.getDate()}-${MONTHS[x.getMonth()]}`)(new Date(d + 'T12:00:00'));
+const MEAL_LABELS = { nonushta: 'Nonushta', tushlik: 'Tushlik', kechki: 'Kechki ovqat', gazak: 'Gazak' };
+const guessMealType = () => { const h = new Date().getHours(); return h < 11 ? 'nonushta' : h < 16 ? 'tushlik' : h < 22 ? 'kechki' : 'gazak'; };
+const sumItems = items => items.reduce((a, i) => ({ calories: a.calories + (+i.calories || 0), protein: a.protein + (+i.protein || 0), fat: a.fat + (+i.fat || 0), carbs: a.carbs + (+i.carbs || 0), grams: a.grams + (+i.grams || 0) }), { calories: 0, protein: 0, fat: 0, carbs: 0, grams: 0 });
+const DEFAULT_PROFILE = { gender: 'erkak', age: 25, weight: 70, height: 175, activity: 1.375, goal: 'saqlash', customCalories: null };
+function calcGoal(p) {
+  if (p.customCalories > 0) return p.customCalories;
+  const bmr = 10 * p.weight + 6.25 * p.height - 5 * p.age + (p.gender === 'erkak' ? 5 : -161);
+  const adj = p.goal === 'ozish' ? -500 : p.goal === 'semirish' ? 400 : 0;
+  return Math.max(1200, Math.round((bmr * p.activity + adj) / 10) * 10);
+}
+function confirmBox(text) {
+  return new Promise(res => {
+    const m = $('#modal'); $('#modalText').textContent = text; m.classList.remove('hidden'); m.classList.add('flex');
+    const done = v => { m.classList.add('hidden'); m.classList.remove('flex'); $('#modalYes').onclick = $('#modalNo').onclick = null; res(v); };
+    $('#modalYes').onclick = () => done(true); $('#modalNo').onclick = () => done(false);
+  });
+}
+async function resize(file, maxSide, q) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image(); img.src = url; await img.decode();
+    const s = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const dataUrl = c.toDataURL('image/jpeg', q);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
+    return { dataUrl, blob };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+// ---------- storage: claude db (per-person, private) with localStorage fallback ----------
+const store = {
+  db: null, uid: null, meals: [], profile: { ...DEFAULT_PROFILE }, ready: false,
+  lsGet(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  async init() {
+    this.meals = this.lsGet('kaloriya.meals.v1', []);
+    this.profile = { ...DEFAULT_PROFILE, ...this.lsGet('kaloriya.profile.v1', {}) };
+    this.ready = true; render();
+    try {
+      if (!window.claude?.use) return;
+      const [db, user] = await Promise.all([claude.use('db'), claude.use('user')]);
+      if (!db || !user) return;
+      const uid = await user.id(); if (!uid) return;
+      this.db = db; this.uid = uid;
+      const base = 'data/users/' + uid;
+      const timer = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000));
+      const [mealsSnap, profSnap] = await Promise.race([Promise.all([db.collection(base + '/meals').get(), db.doc(base + '/settings/profile').get()]), timer]);
+      const remote = (mealsSnap.docs || mealsSnap || []).map(d => (typeof d.data === 'function' ? d.data() : d.data ?? d));
+      const ids = new Set(remote.map(m => m.id));
+      const localOnly = this.meals.filter(m => !ids.has(m.id));
+      this.meals = [...remote, ...localOnly];
+      for (const m of localOnly) await this.dbSetMeal(m);
+      const pd = profSnap && (typeof profSnap.data === 'function' ? profSnap.data() : profSnap.data);
+      if (pd) this.profile = { ...DEFAULT_PROFILE, ...pd }; else await this.dbSetProfile();
+      this.lsSet('kaloriya.meals.v1', this.meals); this.lsSet('kaloriya.profile.v1', this.profile);
+      render();
+    } catch (e) { console.warn('db unavailable, using local storage', e); this.db = null; }
+  },
+  async dbSetMeal(m) { if (this.db) try { await this.db.collection('data/users/' + this.uid + '/meals').doc(m.id).set(m); } catch (e) { console.warn(e); } },
+  async addMeal(m) { this.meals.push(m); this.lsSet('kaloriya.meals.v1', this.meals); await this.dbSetMeal(m); },
+  async deleteMeal(id) {
+    this.meals = this.meals.filter(m => m.id !== id); this.lsSet('kaloriya.meals.v1', this.meals);
+    if (this.db) try { await this.db.collection('data/users/' + this.uid + '/meals').doc(id).delete(); } catch (e) { console.warn(e); }
+  },
+  async clearMeals() { const ids = this.meals.map(m => m.id); this.meals = []; this.lsSet('kaloriya.meals.v1', []); for (const id of ids) if (this.db) try { await this.db.collection('data/users/' + this.uid + '/meals').doc(id).delete(); } catch {} },
+  _pt: null,
+  async dbSetProfile() { if (this.db) try { await this.db.doc('data/users/' + this.uid + '/settings/profile').set(this.profile); } catch (e) { console.warn(e); } },
+  setProfile(p) { this.profile = p; this.lsSet('kaloriya.profile.v1', p); clearTimeout(this._pt); this._pt = setTimeout(() => this.dbSetProfile(), 600); },
+};
+
+// ---------- AI ----------
+let samplePromise = null;
+const getSample = () => (samplePromise ??= (window.claude?.use ? claude.use('sample') : Promise.resolve(null)));
+const PROMPT = `Siz professional dietolog va ovqat tahlilchisisiz. Ilova qilingan rasmdagi ovqatni tahlil qiling.
+- Har bir ovqat/ichimlikni alohida aniqlang (masalan: palov, salat, non, choy).
+- Porsiyani idish, qoshiq, qo'l kabi o'lchov belgilariga qarab grammda taxmin qiling.
+- Kaloriya va makronutrientlarni standart oziq-ovqat ma'lumotlari asosida hisoblang.
+- O'zbek milliy taomlarini yaxshi biling (palov, manti, somsa, lag'mon, sho'rva, shashlik, chuchvara, norin, qozon kabob va h.k.) va ularning odatdagi yog'liligini hisobga oling.
+- Barcha matnlar o'zbek tilida (lotin yozuvida).
+- Agar rasmda ovqat bo'lmasa, is_food=false, items=[] va tip maydonida nima ko'ringanini ayting.
+Faqat JSON qaytaring, boshqa hech narsa yozmang. Format:
+{"is_food": boolean, "title": "taomning qisqa umumiy nomi", "items": [{"name": string, "grams": number, "calories": number, "protein": number, "fat": number, "carbs": number}], "confidence": "past" | "o'rtacha" | "yuqori", "health_score": 1-10 butun son, "tip": "1-2 gaplik foydali maslahat"}`;
+
+function normalize(a) {
+  if (!a || typeof a !== 'object') throw new Error('bad');
+  const num = v => Math.max(0, +v || 0);
+  return {
+    is_food: !!a.is_food, title: String(a.title || 'Taom'),
+    items: (Array.isArray(a.items) ? a.items : []).map(i => ({ name: String(i.name || 'Taom'), grams: num(i.grams), calories: num(i.calories), protein: num(i.protein), fat: num(i.fat), carbs: num(i.carbs) })),
+    confidence: ['past', "o'rtacha", 'yuqori'].includes(a.confidence) ? a.confidence : "o'rtacha",
+    health_score: Math.min(10, Math.max(1, Math.round(+a.health_score || 5))), tip: String(a.tip || ''),
+  };
+}
+
+// ---------- state ----------
+const S = { tab: 'scan', stage: 'idle', preview: '', blob: null, thumb: '', note: '', error: '', analysis: null, items: [], base: [], mealType: 'tushlik', saved: false, date: todayStr(), aiOk: null, abort: null };
+
+// ---------- rendering ----------
+const TABS = [['scan', 'Skaner', '📷'], ['diary', 'Kundalik', '📊'], ['profile', 'Profil', '👤']];
+function renderNav() {
+  $('#topnav').innerHTML = TABS.map(([t, l]) => `<button data-tab="${t}" class="rounded-xl px-4 py-1.5 text-sm font-medium transition ${S.tab === t ? 'bg-white text-emerald-600 shadow-sm dark:bg-slate-800 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'}">${l}</button>`).join('');
+  $('#botnav').innerHTML = `<div class="grid grid-cols-3">${TABS.map(([t, l, i]) => `<button data-tab="${t}" class="flex flex-col items-center gap-0.5 rounded-2xl py-2 text-xs font-medium transition ${S.tab === t ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30' : 'text-slate-500 dark:text-slate-400'}"><span class="text-lg leading-none">${i}</span>${l}</button>`).join('')}</div>`;
+  const kcal = sumItems(store.meals.filter(m => m.date === todayStr()).flatMap(m => m.items)).calories;
+  $('#hdrKcal').textContent = `${r0(kcal)} / ${calcGoal(store.profile)} kkal`;
+}
+function render() { renderNav(); const m = $('#main'); m.innerHTML = S.tab === 'scan' ? viewScan() : S.tab === 'diary' ? viewDiary() : viewProfile(); }
+
+function viewScan() {
+  if (S.stage === 'idle') return `
+  <section class="fade-up">
+    <div class="mb-6 text-center">
+      <h1 class="text-3xl font-extrabold tracking-tight strong sm:text-4xl">Ovqatni rasmga oling — <span class="bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">kaloriyani biling</span></h1>
+      <p class="mx-auto mt-3 max-w-md muted">Sun'iy intellekt bir necha soniyada taom tarkibi, kaloriya, oqsil, yog' va uglevodlarni hisoblab beradi.</p>
+    </div>
+    <div id="drop" class="glass relative overflow-hidden rounded-3xl border-2 border-dashed border-emerald-200 p-8 text-center transition sm:p-12 dark:border-white/15">
+      <div class="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-emerald-300/30 blur-3xl"></div>
+      <div class="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-teal-300/30 blur-3xl"></div>
+      <div class="relative">
+        <div class="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-500 text-4xl shadow-lg shadow-emerald-500/30">🍽️</div>
+        <button data-act="pick" class="btn-primary w-full sm:w-auto">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Rasm yuklash
+        </button>
+        <p class="mt-4 text-sm text-slate-400">Telefonda kamera yoki galereyani tanlang, kompyuterda rasmni shu yerga tashlang</p>
+      </div>
+    </div>
+    ${S.aiOk === false ? `<div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">AI tahlil faqat claude.ai'ga kirgan holda ishlaydi. Iltimos, akkauntingizga kiring.</div>` : ''}
+    <div class="mt-6 grid grid-cols-3 gap-3 text-center">
+      ${[['⚡', 'Tez', '5–15 soniya'], ['🎯', 'Batafsil', 'Har bir taom alohida'], ['🇺🇿', 'Milliy taomlar', 'Palov, manti, somsa…']].map(([i, t, d]) => `<div class="glass rounded-2xl p-3 sm:p-4"><div class="text-2xl">${i}</div><div class="mt-1 text-sm font-semibold strong">${t}</div><div class="text-xs muted">${d}</div></div>`).join('')}
+    </div>
+  </section>`;
+
+  if (S.stage === 'preview' || S.stage === 'loading') return `
+  <section class="glass fade-up overflow-hidden rounded-3xl">
+    <div class="relative aspect-[4/3] w-full overflow-hidden bg-slate-900">
+      <img src="${S.preview}" alt="Ovqat" class="h-full w-full object-cover">
+      ${S.stage === 'loading' ? `<div class="absolute inset-0 bg-emerald-900/30"></div><div class="scan-line"></div>
+      <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-5 text-white"><div class="flex items-center gap-3"><span class="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white"></span><span class="font-medium">AI ovqatni tahlil qilmoqda…</span></div></div>` : ''}
+    </div>
+    ${S.stage === 'preview' ? `<div class="space-y-4 p-5">
+      <input id="note" value="${esc(S.note)}" maxlength="300" placeholder="Izoh (ixtiyoriy): masalan, “yarim porsiya”, “yog'siz”" class="input">
+      <div class="flex gap-3"><button data-act="reset" class="btn-secondary flex-1">Bekor qilish</button><button data-act="analyze" class="btn-primary flex-[2]">✨ Tahlil qilish</button></div>
+    </div>` : `<div class="p-4 text-center"><button data-act="cancel" class="text-sm muted hover:underline">Bekor qilish</button></div>`}
+  </section>`;
+
+  if (S.stage === 'error') return `
+  <section class="glass fade-up rounded-3xl p-8 text-center">
+    <div class="text-5xl">😕</div><p class="mt-3 font-medium strong">${esc(S.error)}</p>
+    <div class="mt-5 flex justify-center gap-3"><button data-act="reset" class="btn-secondary">Boshqa rasm</button>${S.blob ? '<button data-act="analyze" class="btn-primary">Qayta urinish</button>' : ''}</div>
+  </section>`;
+
+  // result
+  const a = S.analysis, t = sumItems(S.items), mc = t.protein * 4 + t.fat * 9 + t.carbs * 4 || 1, has = a.is_food && S.items.length;
+  return `
+  <section class="fade-up space-y-4">
+    <div class="glass overflow-hidden rounded-3xl">
+      <div class="relative h-48 sm:h-64">
+        <img src="${S.preview}" alt="" class="h-full w-full object-cover">
+        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+        <div class="absolute inset-x-0 bottom-0 p-5 text-white">
+          <div class="flex flex-wrap gap-2 text-xs"><span class="rounded-full bg-white/20 px-2.5 py-1 backdrop-blur">Aniqlik: ${esc(a.confidence)}</span>${a.is_food ? `<span class="rounded-full bg-white/20 px-2.5 py-1 backdrop-blur">Foydalilik: ${a.health_score}/10</span>` : ''}</div>
+          <h2 class="mt-2 text-2xl font-bold">${esc(a.title)}</h2>
+        </div>
+      </div>
+      ${has ? `<div class="p-5">
+        <div class="flex items-end justify-between">
+          <div><div class="text-sm muted">Jami</div><div class="text-5xl font-extrabold tracking-tight strong tabnum"><span id="totK">${r0(t.calories)}</span><span class="ml-1 text-xl font-semibold text-slate-400">kkal</span></div></div>
+          <div class="text-right text-sm muted">≈ <span id="totG">${r0(t.grams)}</span> g</div>
+        </div>
+        <div class="mt-5 flex h-3 overflow-hidden rounded-full"><div id="barP" class="bg-sky-500" style="width:${t.protein * 400 / mc}%"></div><div id="barF" class="bg-amber-400" style="width:${t.fat * 900 / mc}%"></div><div id="barC" class="bg-violet-500" style="width:${t.carbs * 400 / mc}%"></div></div>
+        <div class="mt-3 grid grid-cols-3 gap-2">
+          ${[['Oqsil', 'protein', 'bg-sky-500'], ["Yog'", 'fat', 'bg-amber-400'], ['Uglevod', 'carbs', 'bg-violet-500']].map(([l, k, c]) => `<div class="rounded-2xl bg-slate-50 p-3 dark:bg-white/5"><div class="flex items-center gap-1.5 text-xs muted"><span class="h-2 w-2 rounded-full ${c}"></span>${l}</div><div class="mt-0.5 text-lg font-bold strong tabnum"><span id="tot_${k}">${f1(t[k])}</span> g</div></div>`).join('')}
+        </div>
+      </div>` : `<div class="p-5 muted">Rasmda ovqat aniqlanmadi.</div>`}
+    </div>
+    ${has ? `<div class="glass rounded-3xl p-5">
+      <h3 class="mb-1 font-semibold strong">Tarkibi</h3>
+      <p class="mb-4 text-xs muted">Porsiyani o'zgartirsangiz, kaloriya avtomatik qayta hisoblanadi</p>
+      <ul class="divide-y divide-slate-100 dark:divide-white/10">
+        ${S.items.map((it, i) => `<li class="py-3">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0"><div class="truncate font-medium strong">${esc(it.name)}</div><div id="mac${i}" class="text-xs muted tabnum">O ${f1(it.protein)} · Y ${f1(it.fat)} · U ${f1(it.carbs)} g</div></div>
+            <div class="flex shrink-0 items-center gap-2"><span id="kc${i}" class="font-semibold text-emerald-600 tabnum dark:text-emerald-400">${r0(it.calories)} kkal</span><button data-act="rm" data-i="${i}" class="rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-500" aria-label="O'chirish">✕</button></div>
+          </div>
+          <div class="mt-2 flex items-center gap-3">
+            <input type="range" data-g="${i}" min="0" max="${Math.max(50, r0(S.base[i].grams * 3))}" step="5" value="${r0(it.grams)}" class="flex-1">
+            <div class="flex items-center rounded-lg bg-slate-100 px-2 py-1 dark:bg-white/10"><input type="number" data-g="${i}" min="0" value="${r0(it.grams)}" class="w-14 bg-transparent text-right text-sm tabnum outline-none"><span class="ml-1 text-xs text-slate-500">g</span></div>
+          </div>
+        </li>`).join('')}
+      </ul>
+    </div>` : ''}
+    ${a.tip ? `<div class="rounded-3xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">💡 ${esc(a.tip)}</div>` : ''}
+    ${has ? `<div class="glass space-y-4 rounded-3xl p-5">
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">${Object.entries(MEAL_LABELS).map(([k, l]) => `<button data-act="mt" data-v="${k}" ${S.saved ? 'disabled' : ''} class="chip ${S.mealType === k ? 'chip-on' : 'chip-off'}">${l}</button>`).join('')}</div>
+      <div class="flex gap-3"><button data-act="reset" class="btn-secondary flex-1">Yangi rasm</button><button data-act="save" ${S.saved ? 'disabled' : ''} class="btn-primary flex-[2]">${S.saved ? '✓ Kundalikka saqlandi' : "Kundalikka qo'shish"}</button></div>
+    </div>` : `<button data-act="reset" class="btn-primary w-full">Boshqa rasm</button>`}
+    <p class="text-center text-xs text-slate-400">Natijalar taxminiy. Aniq dietologik maslahat uchun mutaxassisga murojaat qiling.</p>
+  </section>`;
+}
+
+function ring(value, max, size = 180, stroke = 14) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r, pct = max > 0 ? Math.min(value / max, 1) : 0, over = value > max;
+  return `<svg width="${size}" height="${size}" class="-rotate-90"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${over ? '#f97316' : '#34d399'}"/><stop offset="100%" stop-color="${over ? '#ef4444' : '#059669'}"/></linearGradient></defs>
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="currentColor" stroke-width="${stroke}" fill="none" class="text-emerald-100 dark:text-white/10"/>
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" stroke="url(#rg)" stroke-width="${stroke}" stroke-linecap="round" fill="none" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct)}" class="ring-anim"/></svg>`;
+}
+function macroBar(label, v, g, color) {
+  const pct = g > 0 ? Math.min(v / g * 100, 100) : 0;
+  return `<div><div class="mb-1.5 flex items-baseline justify-between text-sm"><span class="font-medium text-slate-600 dark:text-slate-300">${label}</span><span class="tabnum muted"><b class="strong">${r0(v)}</b> / ${r0(g)} g</span></div>
+    <div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div class="h-full rounded-full transition-all duration-700" style="width:${pct}%;background:${color}"></div></div></div>`;
+}
+
+function viewDiary() {
+  const goal = calcGoal(store.profile), date = S.date;
+  const dayMeals = store.meals.filter(m => m.date === date).sort((a, b) => a.time.localeCompare(b.time));
+  const t = sumItems(dayMeals.flatMap(m => m.items)), left = goal - t.calories;
+  const week = Array.from({ length: 7 }, (_, i) => { const d = shift(date, i - 6); return { d, kcal: sumItems(store.meals.filter(m => m.date === d).flatMap(m => m.items)).calories }; });
+  const maxBar = Math.max(goal * 1.2, ...week.map(w => w.kcal));
+  const groups = Object.entries(MEAL_LABELS).map(([k, l]) => {
+    const list = dayMeals.filter(m => m.type === k); if (!list.length) return '';
+    return `<div class="glass rounded-3xl p-4"><div class="mb-2 flex items-center justify-between px-1"><h4 class="font-semibold strong">${l}</h4><span class="text-sm font-medium text-emerald-600 tabnum dark:text-emerald-400">${r0(sumItems(list.flatMap(m => m.items)).calories)} kkal</span></div>
+      <ul class="space-y-2">${list.map(m => { const s = sumItems(m.items); const tm = new Date(m.time); return `<li class="flex items-center gap-3 rounded-2xl bg-slate-50 p-2 dark:bg-white/5">
+        ${m.thumb && m.thumb.startsWith('data:image/') ? `<img src="${m.thumb}" alt="" class="h-14 w-14 shrink-0 rounded-xl object-cover">` : '<div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-2xl dark:bg-emerald-500/20">🍽️</div>'}
+        <div class="min-w-0 flex-1"><div class="truncate font-medium strong">${esc(m.title)}</div><div class="truncate text-xs muted">${esc(m.items.map(i => i.name).join(', '))}</div>
+          <div class="text-xs text-slate-400 tabnum">${String(tm.getHours()).padStart(2, '0')}:${String(tm.getMinutes()).padStart(2, '0')} · O ${r0(s.protein)} · Y ${r0(s.fat)} · U ${r0(s.carbs)}</div></div>
+        <div class="text-right"><div class="font-bold strong tabnum">${r0(s.calories)}</div><button data-act="del" data-id="${esc(m.id)}" class="text-xs text-slate-400 hover:text-red-500">o'chirish</button></div></li>`; }).join('')}</ul></div>`;
+  }).join('');
+  return `<div class="fade-up space-y-4">
+    <div class="flex items-center justify-between"><button data-act="day" data-v="-1" class="icon-btn" aria-label="Oldingi kun">‹</button><h2 class="text-lg font-bold strong">${pretty(date)}</h2><button data-act="day" data-v="1" ${date >= todayStr() ? 'disabled' : ''} class="icon-btn disabled:opacity-30" aria-label="Keyingi kun">›</button></div>
+    <div class="glass flex flex-col items-center gap-6 rounded-3xl p-6 sm:flex-row">
+      <div class="relative" style="width:180px;height:180px">${ring(t.calories, goal)}<div class="absolute inset-0 flex flex-col items-center justify-center text-center"><div class="text-4xl font-extrabold tracking-tight strong tabnum">${r0(Math.abs(left))}</div><div class="text-xs muted">${left >= 0 ? 'kkal qoldi' : 'kkal ortiqcha'}</div></div></div>
+      <div class="w-full flex-1 space-y-3">
+        <div class="grid grid-cols-2 gap-2 text-center"><div class="rounded-2xl bg-slate-50 p-3 dark:bg-white/5"><div class="text-xs muted">Iste'mol</div><div class="text-xl font-bold strong tabnum">${r0(t.calories)}</div></div><div class="rounded-2xl bg-slate-50 p-3 dark:bg-white/5"><div class="text-xs muted">Maqsad</div><div class="text-xl font-bold strong tabnum">${goal}</div></div></div>
+        ${macroBar('Oqsil', t.protein, goal * .25 / 4, '#0ea5e9')}${macroBar("Yog'", t.fat, goal * .3 / 9, '#fbbf24')}${macroBar('Uglevod', t.carbs, goal * .45 / 4, '#8b5cf6')}
+      </div>
+    </div>
+    <div class="glass rounded-3xl p-5">
+      <h3 class="mb-4 font-semibold strong">So'nggi 7 kun</h3>
+      <div class="relative flex h-36 items-end gap-2">
+        <div class="pointer-events-none absolute inset-x-0 border-t border-dashed border-emerald-400/70" style="bottom:${goal / maxBar * 100}%"><span class="absolute -top-5 right-0 text-[10px] text-emerald-600 dark:text-emerald-400">maqsad</span></div>
+        ${week.map(w => `<button data-act="setday" data-v="${w.d}" class="group flex h-full flex-1 flex-col items-center justify-end gap-1"><span class="text-[10px] muted tabnum opacity-0 transition group-hover:opacity-100">${r0(w.kcal)}</span>
+          <div class="w-full rounded-t-lg transition-all duration-500 ${w.kcal > goal ? 'bg-gradient-to-t from-orange-400 to-red-400' : 'bg-gradient-to-t from-emerald-400 to-teal-400'} ${w.d === date ? 'opacity-100 ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900' : 'opacity-60'}" style="height:${Math.max(w.kcal / maxBar * 100, w.kcal > 0 ? 3 : 1)}%"></div></button>`).join('')}
+      </div>
+      <div class="mt-2 flex gap-2">${week.map(w => `<div class="flex-1 text-center text-xs muted">${DAYS[new Date(w.d + 'T12:00:00').getDay()]}</div>`).join('')}</div>
+    </div>
+    <div class="space-y-3">
+      ${dayMeals.length ? groups : `<div class="glass rounded-3xl p-8 text-center"><div class="text-4xl">🥗</div><p class="mt-2 text-slate-600 dark:text-slate-300">Bu kunda hali ovqat qo'shilmagan</p>${date === todayStr() ? '<button data-tab="scan" class="btn-primary mx-auto mt-4">📷 Ovqatni skanerlash</button>' : ''}</div>`}
+    </div>
+  </div>`;
+}
+
+const ACTIVITIES = [[1.2, "Kam harakat (o'tirib ishlash)"], [1.375, "Yengil (haftada 1–3 mashg'ulot)"], [1.55, "O'rtacha (haftada 3–5 mashg'ulot)"], [1.725, 'Yuqori (har kuni sport)'], [1.9, "Juda yuqori (og'ir jismoniy ish)"]];
+function seg(key, opts) { const v = store.profile[key]; return `<div class="flex rounded-xl bg-slate-100 p-1 dark:bg-white/10">${opts.map(([o, l]) => `<button type="button" data-act="prof" data-k="${key}" data-v="${o}" class="flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${v === o ? 'bg-white text-emerald-600 shadow dark:bg-slate-800 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}">${l}</button>`).join('')}</div>`; }
+function viewProfile() {
+  const p = store.profile, goal = calcGoal(p), bmi = p.weight / (p.height / 100) ** 2;
+  const bmiLabel = bmi < 18.5 ? 'Vazn yetishmaydi' : bmi < 25 ? "Me'yorda" : bmi < 30 ? 'Ortiqcha vazn' : 'Semizlik';
+  const num = (k, suf) => `<div class="input flex items-center"><input type="number" data-pk="${k}" value="${p[k]}" class="w-full min-w-0 bg-transparent tabnum outline-none"><span class="ml-1 text-xs text-slate-400">${suf}</span></div>`;
+  const field = (l, h) => `<label class="block"><span class="mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-300">${l}</span>${h}</label>`;
+  return `<div class="fade-up space-y-4">
+    <div class="grid grid-cols-2 gap-3">
+      <div class="rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white shadow-lg shadow-emerald-500/30"><div class="text-sm opacity-80">Kunlik me'yor</div><div id="pGoal" class="text-3xl font-extrabold tabnum">${goal}</div><div class="text-sm opacity-80">kkal</div></div>
+      <div class="glass rounded-3xl p-5"><div class="text-sm muted">Tana massasi indeksi</div><div id="pBmi" class="text-3xl font-extrabold strong tabnum">${isFinite(bmi) ? bmi.toFixed(1) : '–'}</div><div id="pBmiL" class="text-sm muted">${bmiLabel}</div></div>
+    </div>
+    <div class="glass space-y-5 rounded-3xl p-5">
+      ${field('Jins', seg('gender', [['erkak', 'Erkak'], ['ayol', 'Ayol']]))}
+      <div class="grid grid-cols-3 gap-3">${field('Yosh', num('age', 'yosh'))}${field('Vazn', num('weight', 'kg'))}${field("Bo'y", num('height', 'sm'))}</div>
+      ${field('Faollik darajasi', `<select data-pk="activity" class="input">${ACTIVITIES.map(([v, l]) => `<option value="${v}" ${p.activity === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`)}
+      ${field('Maqsad', seg('goal', [['ozish', 'Ozish'], ['saqlash', 'Saqlash'], ['semirish', 'Vazn olish']]))}
+      ${field("Me'yorni qo'lda belgilash (ixtiyoriy)", `<input type="number" data-pk="customCalories" placeholder="Avtomatik hisoblanadi" value="${p.customCalories ?? ''}" class="input">`)}
+    </div>
+    <div class="glass rounded-3xl p-5 text-sm muted">${store.db ? "Ma'lumotlaringiz Claude akkauntingizda shaxsiy saqlanadi — faqat siz ko'rasiz." : "Ma'lumotlaringiz shu brauzerda saqlanadi."}
+      <button data-act="clear" class="mt-3 block font-medium text-red-500 hover:underline">Kundalikni tozalash</button></div>
+  </div>`;
+}
+function refreshProfileStats() {
+  const p = store.profile, bmi = p.weight / (p.height / 100) ** 2;
+  $('#pGoal') && ($('#pGoal').textContent = calcGoal(p));
+  $('#pBmi') && ($('#pBmi').textContent = isFinite(bmi) ? bmi.toFixed(1) : '–');
+  $('#pBmiL') && ($('#pBmiL').textContent = bmi < 18.5 ? 'Vazn yetishmaydi' : bmi < 25 ? "Me'yorda" : bmi < 30 ? 'Ortiqcha vazn' : 'Semizlik');
+  renderNav();
+}
+
+// ---------- actions ----------
+async function handleFile(file) {
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { S.error = 'Iltimos, rasm faylini tanlang'; S.stage = 'error'; S.blob = null; return render(); }
+  try {
+    const big = await resize(file, 1280, .85), small = await resize(file, 200, .7);
+    Object.assign(S, { preview: big.dataUrl, blob: big.blob, thumb: small.dataUrl, note: '', analysis: null, saved: false, stage: 'preview' });
+  } catch { Object.assign(S, { error: "Rasmni o'qib bo'lmadi", stage: 'error', blob: null }); }
+  render();
+}
+async function analyze() {
+  S.note = $('#note')?.value ?? S.note;
+  S.stage = 'loading'; render();
+  const ac = new AbortController(); S.abort = ac;
+  try {
+    const sample = await getSample();
+    if (!sample) { S.aiOk = false; throw { message: "AI tahlil uchun claude.ai akkauntingizga kirgan bo'lishingiz kerak." }; }
+    const lim = await sample.limits?.().catch(() => null);
+    if (lim && !lim.images) throw { message: 'Rasm tahlili hozircha mavjud emas.' };
+    const input = PROMPT + (S.note ? `\nFoydalanuvchi izohi: ${S.note.slice(0, 300)}` : '');
+    const res = await sample.json(input, { images: [S.blob], modelTier: 'default', signal: ac.signal, cache: false });
+    if (ac.signal.aborted) return;
+    const a = normalize(res);
+    Object.assign(S, { analysis: a, items: a.items.map(i => ({ ...i })), base: a.items.map(i => ({ ...i })), mealType: guessMealType(), stage: 'result', aiOk: true });
+  } catch (e) {
+    if (ac.signal.aborted) return;
+    console.warn(e);
+    const code = e?.code;
+    S.error = code === 'not_granted' ? "AI'dan foydalanishga ruxsat berilmadi." : code === 'rate_limited' ? "Juda ko'p so'rov. Birozdan so'ng urinib ko'ring." : e?.message && !code ? e.message : "Rasmni tahlil qilib bo'lmadi. Qayta urinib ko'ring.";
+    S.stage = 'error';
+  } finally { S.abort = null; }
+  render();
+}
+function setGrams(i, g) {
+  const b = S.base[i], k = b.grams > 0 ? g / b.grams : 0;
+  S.items[i] = { ...S.items[i], grams: g, calories: b.calories * k, protein: b.protein * k, fat: b.fat * k, carbs: b.carbs * k };
+  const it = S.items[i], t = sumItems(S.items), mc = t.protein * 4 + t.fat * 9 + t.carbs * 4 || 1;
+  $('#kc' + i).textContent = r0(it.calories) + ' kkal';
+  $('#mac' + i).textContent = `O ${f1(it.protein)} · Y ${f1(it.fat)} · U ${f1(it.carbs)} g`;
+  $('#totK').textContent = r0(t.calories); $('#totG').textContent = r0(t.grams);
+  for (const k of ['protein', 'fat', 'carbs']) $('#tot_' + k).textContent = f1(t[k]);
+  $('#barP').style.width = t.protein * 400 / mc + '%'; $('#barF').style.width = t.fat * 900 / mc + '%'; $('#barC').style.width = t.carbs * 400 / mc + '%';
+  document.querySelectorAll(`[data-g="${i}"]`).forEach(el => { if (document.activeElement !== el) el.value = r0(g); });
+}
+async function save() {
+  if (!S.analysis || S.saved) return;
+  S.saved = true; render();
+  await store.addMeal({
+    id: (crypto.randomUUID?.() || String(Date.now()) + Math.random().toString(16).slice(2)), date: todayStr(), time: new Date().toISOString(),
+    type: S.mealType, title: S.analysis.title, thumb: S.thumb,
+    items: S.items.map(i => ({ name: i.name, grams: r0(i.grams), calories: r0(i.calories), protein: +f1(i.protein), fat: +f1(i.fat), carbs: +f1(i.carbs) })),
+  });
+  renderNav();
+}
+
+document.addEventListener('click', async e => {
+  const tb = e.target.closest('[data-tab]');
+  if (tb) { S.tab = tb.dataset.tab; if (S.tab === 'diary') S.date = S.date || todayStr(); render(); window.scrollTo({ top: 0 }); return; }
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'pick') $('#fileInput').click();
+  else if (act === 'analyze') analyze();
+  else if (act === 'cancel') { S.abort?.abort(); S.stage = 'preview'; render(); }
+  else if (act === 'reset') { Object.assign(S, { stage: 'idle', preview: '', blob: null, analysis: null, items: [], error: '' }); render(); }
+  else if (act === 'rm') { const i = +b.dataset.i; S.items.splice(i, 1); S.base.splice(i, 1); render(); }
+  else if (act === 'mt') { S.mealType = b.dataset.v; render(); }
+  else if (act === 'save') save();
+  else if (act === 'day') { S.date = shift(S.date, +b.dataset.v); render(); }
+  else if (act === 'setday') { S.date = b.dataset.v; render(); }
+  else if (act === 'del') { if (await confirmBox("Ushbu yozuvni o'chirasizmi?")) { await store.deleteMeal(b.dataset.id); render(); } }
+  else if (act === 'clear') { if (await confirmBox("Barcha kundalik yozuvlari o'chirilsinmi?")) { await store.clearMeals(); render(); } }
+  else if (act === 'prof') { store.setProfile({ ...store.profile, [b.dataset.k]: b.dataset.v }); render(); }
+});
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.dataset.g !== undefined) setGrams(+el.dataset.g, Math.max(0, +el.value || 0));
+  else if (el.dataset.pk) {
+    const k = el.dataset.pk; let v = el.value;
+    v = k === 'customCalories' ? (v ? +v : null) : (+v || 0);
+    store.setProfile({ ...store.profile, [k]: v }); refreshProfileStats();
+  } else if (el.id === 'note') S.note = el.value;
+});
+$('#fileInput').addEventListener('change', e => { handleFile(e.target.files?.[0]); e.target.value = ''; });
+document.addEventListener('dragover', e => { if (S.tab === 'scan' && S.stage === 'idle') { e.preventDefault(); $('#drop')?.classList.add('!border-emerald-400'); } });
+document.addEventListener('dragleave', () => $('#drop')?.classList.remove('!border-emerald-400'));
+document.addEventListener('drop', e => { if (S.tab === 'scan' && S.stage === 'idle') { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]); } });
+
+render();
+store.init();
+getSample().then(s => { S.aiOk = !!s; if (S.tab === 'scan' && S.stage === 'idle') render(); }).catch(() => {});
+})();
+</script>
+</body>
+</html>

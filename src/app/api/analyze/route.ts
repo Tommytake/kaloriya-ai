@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { AnalysisSchema } from "@/lib/schema";
 
 export const maxDuration = 60;
@@ -40,12 +40,11 @@ export async function POST(req: Request) {
   }
 
   try {
-    const response = await client.beta.messages.parse({
-      model: "claude-opus-5-5",
+    // Claude Haiku 5.5 — eng arzon model (bir rasm ≈ $0.001 dan kam)
+    const response = await client.messages.parse({
+      model: "claude-haiku-5-5",
       max_tokens: 16000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { effort: "medium", format: betaZodOutputFormat(AnalysisSchema) },
+      output_config: { effort: "low", format: zodOutputFormat(AnalysisSchema) },
       system: SYSTEM,
       messages: [
         {

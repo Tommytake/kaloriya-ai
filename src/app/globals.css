@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  background: #f4fbf8;
+  color: #0f172a;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  html,
+  body {
+    background: #020617;
+    color: #e2e8f0;
+  }
+}
+
+.bg-blobs {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40rem 30rem at 0% 0%, rgb(167 243 208 / 0.55), transparent 60%),
+    radial-gradient(35rem 30rem at 100% 10%, rgb(153 246 228 / 0.5), transparent 60%),
+    radial-gradient(40rem 30rem at 50% 110%, rgb(254 243 199 / 0.6), transparent 60%);
+}
+@media (prefers-color-scheme: dark) {
+  .bg-blobs {
+    background:
+      radial-gradient(40rem 30rem at 0% 0%, rgb(16 185 129 / 0.18), transparent 60%),
+      radial-gradient(35rem 30rem at 100% 10%, rgb(20 184 166 / 0.14), transparent 60%);
+  }
+}
+
+@layer components {
+  .glass {
+    @apply border border-white/70 bg-white/70 shadow-xl shadow-emerald-900/5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/60;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3.5 font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:brightness-105 active:scale-[0.98];
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[0.98] dark:border-white/10 dark:bg-white/5 dark:text-slate-200;
+  }
+  .input {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/20 dark:border-white/10 dark:bg-white/5;
+  }
+  .icon-btn {
+    @apply flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 text-2xl leading-none text-slate-600 shadow-sm dark:bg-white/10 dark:text-slate-300;
+  }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-fade-up { animation: fade-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@keyframes scan {
+  0% { top: -6rem; }
+  100% { top: 100%; }
+}
+.scan-line {
+  background: linear-gradient(to bottom, transparent, rgb(52 211 153 / 0.55), transparent);
+  border-bottom: 2px solid rgb(110 231 183);
+  box-shadow: 0 0 30px rgb(52 211 153 / 0.7);
+  animation: scan 1.8s ease-in-out infinite;
+}
+
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgb(209 250 229);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: #10b981;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgb(16 185 129 / 0.5);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #10b981;
+  border: 3px solid #fff;
+}

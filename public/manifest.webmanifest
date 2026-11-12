@@ -1,0 +1,9 @@
+{
+  "name": "KaloriyaAI",
+  "short_name": "KaloriyaAI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4fbf8",
+  "theme_color": "#10b981",
+  "icons": [{ "src": "/favicon.ico", "sizes": "48x48", "type": "image/x-icon" }]
+}
